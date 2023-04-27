@@ -1,4 +1,5 @@
 #include "cpu.h"
+#include <cstring>
 
 uint8_t CPU::Read8(uint32_t addr)
 {
@@ -86,6 +87,14 @@ void CPU::Reset()
     pc = 0xA0000000;
     expevt = 0;
     sr.value = 0x70000010;
+    memset(fr[0], 0, sizeof(fr[0]));
+    memset(fr[1], 0, sizeof(fr[1]));
+
+    for (int i = 0; i < 8; i++)
+        regs[i] = &regs_bank1[i];
+    for (int i = 0; i < 16; i++)
+        regs[i] = &regs_low[i];
+    
 }
 
 void CPU::Clock()
@@ -100,9 +109,9 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint32_t i = (int32_t)(int8_t)(instr & 0xff);
 
-        regs[n] = i;
+        *regs[n] = i;
 
-        // printf("mov #%02x, r%d\n", i, n);
+        printf("mov #%02x, r%d\n", i, n);
         pc += 2;
         return;
     }
@@ -110,10 +119,10 @@ void CPU::Clock()
     {
         uint8_t n = (instr >> 8) & 0xF;
 
-        uint32_t res = regs[n] <<= 16;
+        uint32_t res = *regs[n] <<= 16;
         pc += 2;
 
-        // printf("shll16 r%d\n", n);
+        printf("shll16 r%d\n", n);
         return;
     }
     else if ((instr & 0xF00F) == 0x6009)
@@ -121,11 +130,11 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        uint16_t tmp = regs[m] >> 16;
-        regs[n] = regs[m] << 16;
-        regs[n] |= tmp;
+        uint16_t tmp = *regs[m] >> 16;
+        *regs[n] = *regs[m] << 16;
+        *regs[n] |= tmp;
 
-        // printf("swap.w r%d, r%d\n", m, n);
+        printf("swap.w r%d, r%d\n", m, n);
         pc += 2;
         return;
     }
@@ -133,10 +142,10 @@ void CPU::Clock()
     {
         uint8_t n = (instr >> 8) & 0xF;
         
-        regs[n] <<= 8;
+        *regs[n] <<= 8;
         pc += 2;
 
-        // printf("shll8 r%d\n", n);
+        printf("shll8 r%d\n", n);
 
         return;
     }
@@ -144,10 +153,10 @@ void CPU::Clock()
     {
         uint8_t n = (instr >> 8) & 0xF;
         
-        regs[n] >>= 2;
+        *regs[n] >>= 2;
         pc += 2;
 
-        // printf("shll2 r%d\n", n);
+        printf("shll2 r%d\n", n);
 
         return;
     }
@@ -157,12 +166,12 @@ void CPU::Clock()
         uint8_t m = (instr >> 4) & 0xF;
         uint32_t d = instr & 0xF;
         
-        // printf("mov.l @(%d, r%d), r%d\n", d, m, n);
+        printf("mov.l @(%d, r%d), r%d\n", d, m, n);
 
         d <<= 2;
 
-        uint32_t addr = regs[m] + d;
-        regs[n] = Read32(addr);
+        uint32_t addr = *regs[m] + d;
+        *regs[n] = Read32(addr);
         pc += 2;
         return;
     }
@@ -171,9 +180,9 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
         
-        regs[n] ^= regs[m];
+        *regs[n] ^= *regs[m];
         pc += 2;
-        // printf("xor r%d, r%d\n", m, n);
+        printf("xor r%d, r%d\n", m, n);
         return;
     }
     else if ((instr & 0xF00F) == 0x200E)
@@ -181,18 +190,18 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
         
-        macl = (uint16_t)regs[n]*(uint16_t)regs[m];
+        macl = (uint16_t)*regs[n]*(uint16_t)*regs[m];
         pc += 2;
-        // printf("mulu.w r%d, r%d\n", m, n);
+        printf("mulu.w r%d, r%d\n", m, n);
         return;
     }
     else if ((instr & 0xF0FF) == 0x001A)
     {
         uint8_t n = (instr >> 8) & 0xF;
 
-        regs[n] = macl;
+        *regs[n] = macl;
         pc += 2;
-        // printf("sts macl, r%d\n", n);
+        printf("sts macl, r%d\n", n);
         return;
     }
     else if ((instr & 0xF00F) == 0x2008)
@@ -200,11 +209,11 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        if ((regs[n]&regs[m]) == 0) sr.t = 1;
+        if ((*regs[n]&*regs[m]) == 0) sr.t = 1;
         else sr.t = 0;
         pc += 2;
 
-        // printf("tst r%d, r%d\n", m, n);
+        printf("tst r%d, r%d\n", m, n);
         return;
     }
     else if ((instr & 0xFF00) == 0x8B00)
@@ -217,7 +226,7 @@ void CPU::Clock()
         else
             disp = 0xffffff00 | d;
         
-        // printf("bf 0x%08x\n", pc+4+(disp<<1));
+        printf("bf 0x%08x\n", pc+4+(disp<<1));
         
         if (!sr.t)
             pc = pc+4+(disp<<1);
@@ -235,7 +244,7 @@ void CPU::Clock()
         else
             disp = 0xffffff00 | d;
         
-        // printf("bf 0x%08x\n", pc+4+(disp<<1));
+        printf("bf 0x%08x\n", pc+4+(disp<<1));
         
         if (sr.t)
             pc = pc+4+(disp<<1);
@@ -249,12 +258,12 @@ void CPU::Clock()
         uint8_t m = (instr >> 4) & 0xF;
         uint8_t disp = (instr&0xf);
 
-        // printf("mov.l r%d, @(%d, r%d)\n", m, disp, n);
+        printf("mov.l r%d, @(%d, r%d)\n", m, disp, n);
         disp <<= 2;
 
-        uint32_t addr = regs[n] + disp;
+        uint32_t addr = *regs[n] + disp;
 
-        Write32(addr, regs[m]);
+        Write32(addr, *regs[m]);
         pc += 2;
         return;
     }
@@ -263,21 +272,21 @@ void CPU::Clock()
         uint32_t imm = (int32_t)(int8_t)(instr&0xff);
         uint8_t n = (instr >> 8) & 0xF;
 
-        regs[n] += imm;
+        *regs[n] += imm;
         pc += 2;
 
-        // printf("add #%02x, r%d\n", imm, n);
+        printf("add #%02x, r%d\n", imm, n);
         return;
     }
     else if ((instr&0xF0FF) == 0x4021)
     {
         uint8_t n = (instr >> 8) & 0xF;
 
-        sr.t = regs[n] & 1;
-        regs[n] = ((int32_t)regs[n]) >> 1;
+        sr.t = *regs[n] & 1;
+        *regs[n] = ((int32_t)*regs[n]) >> 1;
 
         pc += 2;
-        // printf("shar r%d\n", n);
+        printf("shar r%d\n", n);
         return;
     }
     else if ((instr&0xFF00) == 0x8100)
@@ -285,21 +294,21 @@ void CPU::Clock()
         uint8_t n = (instr >> 4) & 0xF;
         uint8_t disp = (instr&0xf);
 
-        // printf("mov.w r0, @(%d, r%d)\n", disp, n);
+        printf("mov.w r0, @(%d, r%d)\n", disp, n);
         disp <<= 1;
 
-        uint32_t addr = regs[n] + disp;
+        uint32_t addr = *regs[n] + disp;
 
-        Write16(addr, regs[0]);
+        Write16(addr, *regs[0]);
         pc += 2;
         return;
     }
     else if ((instr&0xFF00) == 0xCB00)
     {
         uint8_t imm = instr & 0xff;
-        regs[0] |= imm;
+        *regs[0] |= imm;
 
-        // printf("or #%02x, r0\n", imm);
+        printf("or #%02x, r0\n", imm);
         pc += 2;
         return;
     }
@@ -307,22 +316,22 @@ void CPU::Clock()
     {
         uint8_t n = (instr >> 8) & 0xF;
 
-        sr.t = regs[n] & 1;
-        regs[n] >>= 1;
+        sr.t = *regs[n] & 1;
+        *regs[n] >>= 1;
         pc += 2;
 
-        // printf("shlr r%d\n", n);
+        printf("shlr r%d\n", n);
         return;
     }
     else if ((instr&0xF0FF) == 0x4005)
     {
         uint8_t n = (instr >> 8) & 0xF;
-        sr.t = regs[n] & 1;
-        regs[n] >>= 1;
-        regs[n] |= (sr.t<<31);
+        sr.t = *regs[n] & 1;
+        *regs[n] >>= 1;
+        *regs[n] |= (sr.t<<31);
 
         pc += 2;
-        // printf("rotr r%d\n", n);
+        printf("rotr r%d\n", n);
         return;
     }
     else if ((instr&0xF00F) == 0x6003)
@@ -330,36 +339,36 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        regs[n] = regs[m];
+        *regs[n] = *regs[m];
 
         pc += 2;
-        // printf("mov r%d, r%d\n", m, n);
+        printf("mov r%d, r%d\n", m, n);
         return;
     }
     else if ((instr&0xFF00) == 0xC800)
     {
         uint8_t imm = instr & 0xff;
-        if (regs[0]&imm) sr.t = 1;
+        if (*regs[0]&imm) sr.t = 1;
         else sr.t = 0;
         pc += 2;
 
-        // printf("tst #%02x, r0\n", imm);
+        printf("tst #%02x, r0\n", imm);
         return;
     }
     else if ((instr&0xF0FF) == 0x0083)
     {
         uint8_t n = (instr >> 8) & 0xF;
         pc += 2;
-        // printf("pref @r%d\n", n);
+        printf("pref @r%d\n", n);
         return;
     }
     else if ((instr&0xF0FF) == 0x402B)
     {
         uint8_t n = (instr >> 8) & 0xF;
 
-        // printf("jmp @r%d\n", n);
+        printf("jmp @r%d\n", n);
 
-        uint32_t tmp = regs[n];
+        uint32_t tmp = *regs[n];
         pc += 2;
         Clock();
         pc = tmp;
@@ -367,7 +376,7 @@ void CPU::Clock()
     }
     else if (instr == 0x9)
     {
-        // printf("nop\n");
+        printf("nop\n");
         pc += 2;
         return;
     }
@@ -376,9 +385,9 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        Write8(regs[n], regs[m]);
+        Write8(*regs[n], *regs[m]);
 
-        // printf("mov.b r%d, @r%d\n", m, n);
+        printf("mov.b r%d, @r%d\n", m, n);
         pc += 2;
         return;
     }
@@ -387,9 +396,9 @@ void CPU::Clock()
         uint8_t m = (instr >> 4) & 0xF;
         uint32_t disp = (instr&0xf)<<1;
 
-        // printf("mov.w @(%d, r%d), r0\n", disp>>1, m);
+        printf("mov.w @(%d, r%d), r0\n", disp>>1, m);
 
-        regs[0] = (int32_t)(int16_t)Read16(regs[m] + disp);
+        *regs[0] = (int32_t)(int16_t)Read16(*regs[m] + disp);
         pc += 2;
         return;
     }
@@ -398,11 +407,11 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        if (regs[n] > regs[m]) sr.t = 1;
+        if (*regs[n] > *regs[m]) sr.t = 1;
         else sr.t = 0;
 
         pc += 2;
-        // printf("cmp/hi r%d, r%d\n", m, n);
+        printf("cmp/hi r%d, r%d\n", m, n);
         return;
     }
     else if ((instr&0xF00F) == 0x6008)
@@ -411,13 +420,13 @@ void CPU::Clock()
         uint8_t m = (instr >> 4) & 0xF;
 
         uint32_t temp0, temp1;
-        temp0 = regs[m] & 0xFFFF0000;
-        temp1 = (regs[m] & 0xFF) << 8;
-        regs[n] = (regs[m] & 0x0000FF00) >> 8;
-        regs[n] |= temp1|temp0;
+        temp0 = *regs[m] & 0xFFFF0000;
+        temp1 = (*regs[m] & 0xFF) << 8;
+        *regs[n] = (*regs[m] & 0x0000FF00) >> 8;
+        *regs[n] |= temp1|temp0;
         pc += 2;
 
-        // printf("swap.b r%d, r%d\n", m, n);
+        printf("swap.b r%d, r%d\n", m, n);
         return;
     }
     else if ((instr&0xF00F) == 0x2001)
@@ -425,19 +434,19 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        Write16(regs[n], regs[m]);
+        Write16(*regs[n], *regs[m]);
 
         pc += 2;
-        // printf("mov.w r%d, @r%d\n", m, n);
+        printf("mov.w r%d, @r%d\n", m, n);
         return;
     }
     else if ((instr&0xFF00) == 0xC700)
     {
         uint32_t d = instr&0xff;
 
-        regs[0] = (pc&0xfffffffc)+4+(d<<2);
+        *regs[0] = (pc&0xfffffffc)+4+(d<<2);
 
-        // printf("mova #%08x, r0\n", (pc&0xfffffffc)+4+(d<<2));
+        printf("mova #%08x, r0\n", (pc&0xfffffffc)+4+(d<<2));
         pc += 2;
         return;
     }
@@ -445,12 +454,12 @@ void CPU::Clock()
     {
         uint8_t n = (instr >> 8) & 0xF;
 
-        regs[n] -= 1;
-        if (regs[n]) sr.t = 0;
+        *regs[n] -= 1;
+        if (*regs[n]) sr.t = 0;
         else sr.t = 1;
 
         pc += 2;
-        // printf("dt r%d\n", n);
+        printf("dt r%d\n", n);
         return;
     }
     else if ((instr&0xF00F) == 0x6005)
@@ -458,11 +467,11 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        regs[n] = (int32_t)(int16_t)Read16(regs[m]);
-        regs[m] += 2;
+        *regs[n] = (int32_t)(int16_t)Read16(*regs[m]);
+        *regs[m] += 2;
 
         pc += 2;
-        // printf("mov.w @r%d+, r%d\n", m, n);
+        printf("mov.w @r%d+, r%d\n", m, n);
         return;
     }
     else if ((instr&0xF00F) == 0x2005)
@@ -470,11 +479,11 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        regs[n] -= 2;
-        Write16(regs[n], regs[m]);
+        *regs[n] -= 2;
+        Write16(*regs[n], *regs[m]);
 
         pc += 2;
-        // printf("mov.w r%d, @-r%d\n", m, n);
+        printf("mov.w r%d, @-r%d\n", m, n);
         return;
     }
     else if ((instr&0xF00F) == 0x6002)
@@ -482,10 +491,10 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        regs[n] = Read32(regs[m]);
+        *regs[n] = Read32(*regs[m]);
 
         pc += 2;
-        // printf("mov.l @r%d, r%d\n", m, n);
+        printf("mov.l @r%d, r%d\n", m, n);
         return;
     }
     else if ((instr&0xF000) == 0xD000)
@@ -495,9 +504,9 @@ void CPU::Clock()
 
         uint32_t addr = (disp<<2)+(pc&0xfffffffc)+4;
 
-        regs[n] = Read32(addr);
+        *regs[n] = Read32(addr);
         pc += 2;
-        // printf("mov.l @(%d, pc), r%d\n", disp, n);
+        printf("mov.l @(%d, pc), r%d\n", disp, n);
         return;
     }
     else if ((instr&0xF00F) == 0x2002)
@@ -505,10 +514,10 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        Write32(regs[n], regs[m]);
+        Write32(*regs[n], *regs[m]);
         pc += 2;
 
-        // printf("mov.l r%d, @r%d\n", m, n);
+        printf("mov.l r%d, @r%d\n", m, n);
         return;
     }
     else if ((instr&0xF00F) == 0x6006)
@@ -516,20 +525,20 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
 
-        regs[n] = Read32(regs[m]);
-        regs[m] += 4;
+        *regs[n] = Read32(*regs[m]);
+        *regs[m] += 4;
         pc += 2;
 
-        // printf("mov.l @r%d+, r%d\n", m, n);
+        printf("mov.l @r%d+, r%d (0x%08x)\n", m, n, *regs[n]);
         return;
     }
     else if ((instr&0xF0FF) == 0x40FA)
     {
         uint8_t n = (instr >> 8) & 0xF;
 
-        regs[n] = dbr;
+        *regs[n] = dbr;
         pc += 2;
-        // printf("ldc r%d, dbr\n", n);
+        printf("ldc r%d, dbr\n", n);
         return;
     }
     else if ((instr&0xF0FF) == 0x400b)
@@ -537,7 +546,7 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         pr = pc+4;
         pc += 2;
-        uint32_t tmp = regs[n];
+        uint32_t tmp = *regs[n];
         Clock();
         pc = tmp;
         return;
@@ -545,17 +554,29 @@ void CPU::Clock()
     else if ((instr&0xF0FF) == 0x400e)
     {
         uint8_t n = (instr >> 8) & 0xF;
-        sr.value = regs[n];
+        sr.value = *regs[n];
+
+        if (!sr.rb)
+        {
+            for (int i = 0; i < 8; i++)
+                regs[i] = &regs_bank0[i];
+        }
+        else
+        {
+            for (int i = 0; i < 8; i++)
+                regs[i] = &regs_bank1[i];
+        }
+
         pc += 2;
-        // printf("ldc r%d, sr\n", n);
+        printf("ldc r%d, sr\n", n);
         return;
     }
     else if ((instr&0xF0FF) == 0x406a)
     {
         uint8_t n = (instr >> 8) & 0xF;
-        fpcsr.value = regs[n];
+        fpcsr.value = *regs[n];
         pc += 2;
-        // printf("ldc r%d, fpcsr\n", n);
+        printf("ldc r%d, fpcsr\n", n);
         return;
     }
     else if ((instr&0xF00F) == 0xF009)
@@ -563,11 +584,11 @@ void CPU::Clock()
         uint8_t n = (instr >> 8) & 0xF;
         uint8_t m = (instr >> 4) & 0xF;
         
-        fr[fpcsr.fr][n] = (float)Read32(regs[m]);
-        regs[m] += 4;
+        fr[fpcsr.fr][n] = (float)Read32(*regs[m]);
+        *regs[m] += 4;
 
         pc += 2;
-        printf("fmov.s @r%d+, r%d\n", m, n);
+        printf("fmov.s @r%d+, fr%d (0x%08x)\n", m, n, *regs[m]);
         return;
     }
     else if (instr == 0xfbfd)
@@ -577,6 +598,150 @@ void CPU::Clock()
         printf("frchg\n");
         return;
     }
+    else if ((instr & 0xF0FF) == 0x4056)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        fpul = (float)Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("lds.l @r%d+, fpul\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4066)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        fpcsr.value = (float)Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("lds.l @r%d+, fpcsr\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4007)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        sr.value = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        if (!sr.rb)
+        {
+            for (int i = 0; i < 8; i++)
+                regs[i] = &regs_bank0[i];
+        }
+        else
+        {
+            for (int i = 0; i < 8; i++)
+                regs[i] = &regs_bank1[i];
+        }
+
+        printf("ldc.l @r%d+, sr\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4006)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        mach = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("ldc.l @r%d+, mach\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4016)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        macl = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("ldc.l @r%d+, macl\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4026)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        pr = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("ldc.l @r%d+, pr\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4017)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        gbr = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("ldc.l @r%d+, gbr\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4027)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        vbr = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("ldc.l @r%d+, vbr\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4037)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        ssr.value = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("ldc.l @r%d+, ssr\n", m);
+
+        pc += 2;
+        return;
+    }
+    else if ((instr & 0xF0FF) == 0x4047)
+    {
+        uint8_t m = (instr >> 8) & 0xF;
+        
+        spc = Read32(*regs[m]);
+        *regs[m] += 4;
+
+        printf("ldc.l @r%d+, spc\n", m);
+
+        pc += 2;
+        return;
+    }
+    // else if ((instr & 0xF00F) == 0x2006)
+    // {
+    //     uint8_t n = (instr >> 8) & 0xF;
+    //     uint8_t m = (instr >> 4) & 0xF;
+        
+    //     printf("mov.l r%d, @-r%d\n", m, n);
+
+    //     *regs[n] -= 4;
+    //     Write32(*regs[n], *regs[m]);
+    //     pc += 2;
+    //     return;
+    // }
+
 
     printf("Unhandled instruction 0x%04x\n", instr);
     exit(1);
@@ -585,12 +750,11 @@ void CPU::Clock()
 void CPU::Dump()
 {
     for (int i = 0; i < 16; i++)
-        printf("r%d\t->\t0x%08x\n", i, regs[i]);
+        printf("r%d\t->\t0x%08x\n", i, *regs[i]);
     for (int i = 0; i < 16; i++)
-    {
         printf("fr%d_bank0\t->\t%f\n", i, fr[0][i]);
+    for (int i = 0; i < 16; i++)
         printf("fr%d_bank1\t->\t%f\n", i, fr[1][i]);
-    }
     printf("%s\n", sr.t ? "t" : ".");
     printf("pc\t->\t0x%08x\n", pc);
 }

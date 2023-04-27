@@ -7,7 +7,10 @@ class CPU
 {
 private:
     uint32_t pc;
-    uint32_t regs[16];
+    uint32_t* regs[16];
+    uint32_t regs_bank0[8];
+    uint32_t regs_bank1[8];
+    uint32_t regs_low[8];
     uint32_t expevt;
 
     uint32_t macl, mach;
@@ -15,6 +18,8 @@ private:
     uint16_t rfcr;
     uint32_t dbr = 0;
     uint32_t pr = 0;
+    uint32_t gbr, vbr;
+    uint32_t spc;
 
     union
     {
@@ -35,7 +40,7 @@ private:
             uint32_t md : 1;
             uint32_t : 1;
         };
-    } sr;
+    } sr, ssr;
 
     union
     {
@@ -68,6 +73,7 @@ private:
     } fpcsr;
 
     float fr[2][15];
+    float fpul;
 
     bool t = false;
 
