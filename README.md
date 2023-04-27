@@ -1,6 +1,6 @@
 <p align="center">
     <b>Dreamcatcher</b>
-    <img src="images/dc_logo.png">
+    <img src="images/dc_logo.png" width="640" height=" 467.25">
 </p>
 
 The simple Sega Dreamcast emulator
