@@ -14,4 +14,4 @@ Nothing, as of right now
 Pretty much everything that isn't the CPU
 
 # Contributors
-@hello01-debug
+[@hello01-debug](https://github.com/hello01-debug)
