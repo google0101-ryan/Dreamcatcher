@@ -1,3 +1,6 @@
 dis
 dc
 *.bin
+build
+dump
+*.swp

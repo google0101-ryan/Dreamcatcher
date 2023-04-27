@@ -1,11 +1,18 @@
 #include "bus.h"
 #include "cpu.h"
+#include <csignal>
 
 CPU* sh4;
 
 void Dump()
 {
     sh4->Dump();
+    Bus::Dump();
+}
+
+void sig(int)
+{
+    exit(1);
 }
 
 int main()
@@ -16,6 +23,7 @@ int main()
     sh4->Reset();
 
     std::atexit(Dump);
+    std::signal(SIGINT, sig);
 
     while (1)
         sh4->Clock();
